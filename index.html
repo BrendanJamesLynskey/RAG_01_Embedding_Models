@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG 01 — Embedding Models</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-card: #0d1117;
+            --bg-code: #161b22;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #76B900;
+            --accent-dim: #76B90044;
+            --accent-glow: #76B90033;
+            --border: #21262d;
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            --font-body: 'Inter', sans-serif;
+            --max-width: 900px;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 17px;
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            position: relative;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .hero > * { position: relative; z-index: 1; }
+        .series-label {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+        .hero h1 {
+            font-family: var(--font-display);
+            font-size: clamp(2rem, 5vw, 3.2rem);
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+            margin-bottom: 1rem;
+        }
+        .hero h1 .accent { color: var(--accent); }
+        .hero .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            max-width: 640px;
+            margin-bottom: 2rem;
+        }
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 2.5rem;
+        }
+        .tag {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+            white-space: nowrap;
+        }
+        .pipeline {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            margin-bottom: 1rem;
+            max-width: var(--max-width);
+        }
+        .pipeline-step {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            padding: 0.3rem 0.7rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .pipeline-arrow { color: var(--accent); font-size: 0.9rem; font-weight: 700; }
+        .slide {
+            min-height: 100vh;
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 4rem 1.5rem;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .slide-number {
+            font-family: var(--font-display);
+            font-size: 5rem;
+            font-weight: 700;
+            color: var(--accent-dim);
+            position: absolute;
+            top: 2rem;
+            right: 1.5rem;
+            line-height: 1;
+            user-select: none;
+        }
+        .slide h2 {
+            font-family: var(--font-display);
+            font-size: 1.9rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+            line-height: 1.25;
+        }
+        .slide h3 {
+            font-family: var(--font-display);
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .slide p { margin-bottom: 1rem; color: var(--text-secondary); }
+        .slide p strong { color: var(--text-primary); }
+        .slide ul, .slide ol { margin-bottom: 1rem; padding-left: 1.5rem; color: var(--text-secondary); }
+        .slide li { margin-bottom: 0.4rem; }
+        .slide li strong { color: var(--text-primary); }
+        .slide code {
+            font-family: var(--font-mono);
+            font-size: 0.88em;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            padding: 0.05rem 0.35rem;
+            border-radius: 3px;
+            color: #c9d1d9;
+        }
+        .code-block {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin: 1.25rem 0;
+            overflow: hidden;
+        }
+        .code-header {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            background: rgba(118, 185, 0, 0.08);
+            padding: 0.4rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .code-block pre { margin: 0; padding: 1rem; overflow-x: auto; }
+        .code-block code {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #c9d1d9;
+            background: transparent;
+            border: none;
+            padding: 0;
+        }
+        .kw { color: #ff7b72; }
+        .fn { color: #d2a8ff; }
+        .str { color: #a5d6ff; }
+        .cm { color: #8b949e; font-style: italic; }
+        .num { color: #79c0ff; }
+        .type { color: #ffa657; }
+        .dir { color: #ff7b72; }
+        .mac { color: #ffa657; }
+        .table-wrap {
+            overflow-x: auto;
+            margin: 1.25rem 0;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th {
+            background: var(--bg-code);
+            color: var(--accent);
+            font-weight: 600;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            font-family: var(--font-display);
+            white-space: nowrap;
+        }
+        td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+        tr:last-child td { border-bottom: none; }
+        tr:nth-child(even) td { background: rgba(13, 17, 23, 0.5); }
+        .diagram-flow {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .diagram-box {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            text-align: center;
+            white-space: nowrap;
+        }
+        .diagram-box.accent { border-color: var(--accent); color: var(--accent); background: rgba(118, 185, 0, 0.08); }
+        .diagram-box.dim { color: var(--text-secondary); border-color: var(--border); }
+        .diagram-arrow { color: var(--accent); font-size: 1.3rem; font-weight: 700; }
+        .diagram-vertical {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.3rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .diagram-vertical .diagram-arrow { font-size: 1.1rem; }
+        .hierarchy {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .hierarchy-level { display: flex; align-items: center; gap: 0.75rem; }
+        .hierarchy-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 80px;
+            text-align: right;
+        }
+        .hierarchy-items { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+        .hierarchy-item {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+        .hierarchy-item.accent { border-color: var(--accent); color: var(--accent); background: rgba(118, 185, 0, 0.08); }
+        .diagram-grid {
+            display: grid;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .diagram-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+        .diagram-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .diagram-panel {
+            padding: 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+        .diagram-panel.accent-border { border-left: 3px solid var(--accent); }
+        .diagram-panel h4 {
+            font-family: var(--font-display);
+            font-size: 1rem;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+        .diagram-panel p, .diagram-panel ul { font-size: 0.85rem; }
+        .callout {
+            background: var(--bg-card);
+            border-left: 3px solid var(--accent);
+            border-radius: 0 8px 8px 0;
+            padding: 1rem 1.25rem;
+            margin: 1.25rem 0;
+        }
+        .callout p { margin-bottom: 0; }
+        .callout p + p { margin-top: 0.5rem; }
+        .callout .callout-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.3rem;
+        }
+        .contents-list { list-style: none; padding-left: 0; counter-reset: contents; }
+        .contents-list li {
+            counter-increment: contents;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .contents-list li:last-child { border-bottom: none; }
+        .contents-list li::before {
+            content: counter(contents, decimal-leading-zero);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            min-width: 2rem;
+        }
+        .contents-list a { color: var(--text-primary); text-decoration: none; transition: color 0.2s; }
+        .contents-list a:hover { color: var(--accent); }
+        .footer {
+            text-align: center;
+            padding: 3rem 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+            max-width: var(--max-width);
+            margin: 0 auto;
+        }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+        .canvas-wrap {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1.25rem 0;
+            overflow-x: auto;
+        }
+        .canvas-wrap canvas, .canvas-wrap svg { display: block; margin: 0 auto; max-width: 100%; }
+        .badge {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            padding: 0.1rem 0.45rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            vertical-align: middle;
+            margin-left: 0.3rem;
+        }
+        .badge.ok    { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+        .badge.warn  { border-color: #ffa657; color: #ffa657; background: rgba(255,166,87,0.08); }
+        .badge.bad   { border-color: #ff7b72; color: #ff7b72; background: rgba(255,123,114,0.08); }
+        @media (max-width: 640px) {
+            .slide { padding: 3rem 1rem; min-height: auto; }
+            .slide-number { font-size: 3rem; top: 1.5rem; right: 1rem; }
+            .slide h2 { font-size: 1.5rem; }
+            .diagram-grid.cols-2, .diagram-grid.cols-3 { grid-template-columns: 1fr; }
+            .pipeline { gap: 0.15rem; }
+            .pipeline-step { font-size: 0.6rem; padding: 0.2rem 0.4rem; }
+            .hero h1 { font-size: 1.8rem; }
+            table { font-size: 0.78rem; }
+        }
+    </style>
+</head>
+<body>
+<header class="hero">
+    <div class="series-label">RAG &amp; Retrieval Systems Series &mdash; Presentation 01</div>
+    <h1>Embedding Models &mdash; The <span class="accent">Geometry of Meaning</span></h1>
+    <p class="subtitle">Dense vs sparse, bi-encoder vs cross-encoder, ColBERT late interaction, Matryoshka embeddings, MTEB/BEIR evals, and every model family you need to know in 2025.</p>
+    <div class="tags">
+        <span class="tag">Dense Retrieval</span>
+        <span class="tag">Bi-Encoder</span>
+        <span class="tag">Cross-Encoder</span>
+        <span class="tag">ColBERT</span>
+        <span class="tag">Matryoshka</span>
+        <span class="tag">MTEB</span>
+        <span class="tag">BGE / GTE / E5</span>
+    </div>
+    <div class="pipeline">
+        <span class="pipeline-step">Raw Text</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Tokeniser</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Encoder</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Pooling</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Normalise</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Vector Index</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">ANN Search</span>
+    </div>
+</header>
+
+<section class="slide" id="slide-00">
+    <div class="slide-number">00</div>
+    <h2>Topics We'll Cover</h2>
+    <ul class="contents-list">
+        <li><a href="#slide-01">Why Embeddings &mdash; The Geometry of Meaning</a></li>
+        <li><a href="#slide-02">Bi-Encoder vs Cross-Encoder</a></li>
+        <li><a href="#slide-03">The Modern Model Families</a></li>
+        <li><a href="#slide-04">ColBERT &amp; Late Interaction</a></li>
+        <li><a href="#slide-05">Matryoshka Embeddings &mdash; One Model, Many Dimensions</a></li>
+        <li><a href="#slide-06">Domain Adaptation &mdash; TSDAE, GPL, Hard Negative Mining</a></li>
+        <li><a href="#slide-07">Evaluating Embeddings &mdash; MTEB, BEIR, In-Domain Evals</a></li>
+        <li><a href="#slide-08">Practical Sizing &mdash; Dim, Throughput, GPU vs CPU</a></li>
+        <li><a href="#slide-09">What to Take Away</a></li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-01">
+    <div class="slide-number">01</div>
+    <h2>Why Embeddings &mdash; The Geometry of Meaning</h2>
+    <p>An embedding is a real-valued vector that encodes the <strong>semantic position</strong> of a token sequence in a high-dimensional space. The key property is metric: similar meanings live close together under cosine similarity or dot product, enabling sub-linear nearest-neighbour search instead of full corpus comparison.</p>
+    <p>There are two competing traditions:</p>
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Sparse (lexical)</h4>
+            <p>BM25, SPLADE, TF-IDF. The vector dimensionality equals the vocabulary size (&asymp;30,000&ndash;250,000). Most entries are zero. Exact term match. Fast. Fragile to synonyms and paraphrases. SPLADE v2 learns importance weights per term via a BERT-like MLM head, recovering some semantic generalisation.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Dense (semantic)</h4>
+            <p>BERT-derived encoders, collapsed to a single fixed-size vector (typically 256&ndash;4096 dims) via CLS-token or mean pooling. No term-overlap required. Captures paraphrases. Slower to build index, faster per-query via ANN. Sensitive to domain shift &mdash; the core challenge this deck addresses.</p>
+        </div>
+    </div>
+    <div class="callout">
+        <div class="callout-label">The unit of meaning</div>
+        <p>The pooling choice is load-bearing. <strong>CLS pooling</strong> works well when the encoder was pre-trained with a CLS objective (vanilla BERT). <strong>Mean pooling</strong> outperforms CLS on most retrieval benchmarks when the model is fine-tuned with a contrastive objective (sentence-transformers default since 2021). <strong>Weighted mean</strong> (by token importance) is used in some SPLADE-family hybrids.</p>
+    </div>
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 700 200" width="700" height="200" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .ev-lbl { fill: #8b949e; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+                .ev-dot { fill: #76B900; }
+                .ev-dotd { fill: #8b949e; }
+                .ev-line { stroke: #76B900; stroke-width: 1; stroke-dasharray: 3 3; }
+                .ev-ttl { fill: #76B900; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px; }
+            </style>
+            <text x="10" y="18" class="ev-ttl">Cosine similarity in 2-D (illustrative)</text>
+            <circle cx="220" cy="110" r="90" fill="none" stroke="#21262d" stroke-width="1"/>
+            <line x1="220" y1="110" x2="310" y2="110" stroke="#21262d" stroke-width="1"/>
+            <line x1="220" y1="20"  x2="220" y2="200" stroke="#21262d" stroke-width="1"/>
+            <!-- doc vectors -->
+            <line x1="220" y1="110" x2="290" y2="50"  class="ev-line"/>
+            <circle cx="290" cy="50"  r="5" class="ev-dot"/>
+            <text x="295" y="48" class="ev-lbl">"neural network training"</text>
+            <line x1="220" y1="110" x2="295" y2="60"  stroke="#76B90066" stroke-width="1" stroke-dasharray="2 2"/>
+            <circle cx="295" cy="60"  r="5" class="ev-dot"/>
+            <text x="300" y="58" class="ev-lbl">"backpropagation gradients"</text>
+            <line x1="220" y1="110" x2="140" y2="55" stroke="#ffa657" stroke-width="1" stroke-dasharray="3 3"/>
+            <circle cx="140" cy="55"  r="5" fill="#ffa657"/>
+            <text x="50"  y="52" class="ev-lbl">"photosynthesis chlorophyll"</text>
+            <!-- angle label -->
+            <path d="M 270 110 A 50 50 0 0 0 258 77" fill="none" stroke="#76B900" stroke-width="1"/>
+            <text x="265" y="98" class="ev-lbl">&theta; small</text>
+        </svg>
+    </div>
+</section>
+
+<section class="slide" id="slide-02">
+    <div class="slide-number">02</div>
+    <h2>Bi-Encoder vs Cross-Encoder</h2>
+    <p>The most important architectural fork. Nearly every production RAG pipeline uses <em>both</em>: bi-encoder for retrieval, cross-encoder for reranking.</p>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Property</th><th>Bi-Encoder</th><th>Cross-Encoder</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Input</strong></td><td>Query and document encoded <em>separately</em></td><td>Query and document concatenated with [SEP]; encoded jointly</td></tr>
+                <tr><td><strong>Score</strong></td><td>Cosine / dot-product of two fixed vectors</td><td>Single logit from classification head</td></tr>
+                <tr><td><strong>Index-time work</strong></td><td>Pre-compute document embeddings offline</td><td>None &mdash; reranker can't pre-compute</td></tr>
+                <tr><td><strong>Query-time cost</strong></td><td>One encoder pass + ANN lookup: ~5&ndash;20 ms</td><td>N forward passes over top-k docs: ~50&ndash;500 ms for k=100</td></tr>
+                <tr><td><strong>Quality ceiling</strong></td><td>Lower: no cross-attention between Q and D</td><td>Higher: full attention sees both Q and D tokens</td></tr>
+                <tr><td><strong>Typical use</strong></td><td>First-stage retrieval (recall@k)</td><td>Second-stage reranking (precision@k)</td></tr>
+                <tr><td><strong>Example models</strong></td><td>BGE-M3, E5-large-v2, text-embedding-3-large</td><td>BGE-reranker-v2-m3, Cohere Rerank 3.5, mxbai-rerank-large-v1</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="callout">
+        <div class="callout-label">The asymmetric encoding trick</div>
+        <p>Many production bi-encoders use <strong>asymmetric encoding</strong>: query and document use different prompt prefixes (e.g. <code>query: ...</code> vs <code>passage: ...</code> for E5 models). This is not cosmetic &mdash; the encoder's representation space is shaped differently for short questions vs long passages. Forgetting the prefix prefix is one of the most common production bugs: NDCG@10 can drop 3&ndash;8 points silently.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-03">
+    <div class="slide-number">03</div>
+    <h2>The Modern Model Families</h2>
+    <p>As of early 2025, the landscape has consolidated around a handful of open and proprietary families. Knowing the lineage matters: a model trained with <strong>contrastive InfoNCE loss</strong> behaves very differently from one trained with <strong>MNRL (Multiple Negatives Ranking Loss)</strong>.</p>
+    <div class="hierarchy">
+        <div class="hierarchy-level">
+            <div class="hierarchy-label">Open &mdash; general</div>
+            <div class="hierarchy-items">
+                <div class="hierarchy-item accent">BGE-M3 (FlagAI)</div>
+                <div class="hierarchy-item accent">GTE-Qwen2 (Alibaba)</div>
+                <div class="hierarchy-item accent">E5-mistral-7b (MS)</div>
+                <div class="hierarchy-item">Nomic-embed-text-v1.5</div>
+                <div class="hierarchy-item">Jina-embeddings-v3</div>
+            </div>
+        </div>
+        <div class="hierarchy-level">
+            <div class="hierarchy-label">Open &mdash; multilingual</div>
+            <div class="hierarchy-items">
+                <div class="hierarchy-item accent">BGE-M3 (100+ langs)</div>
+                <div class="hierarchy-item">multilingual-e5-large-instruct</div>
+                <div class="hierarchy-item">paraphrase-multilingual-mpnet-base-v2</div>
+            </div>
+        </div>
+        <div class="hierarchy-level">
+            <div class="hierarchy-label">Proprietary</div>
+            <div class="hierarchy-items">
+                <div class="hierarchy-item accent">text-embedding-3-large (OpenAI, 3072d)</div>
+                <div class="hierarchy-item accent">embed-v3 (Cohere, 1024d)</div>
+                <div class="hierarchy-item accent">voyage-3-large (Voyage AI)</div>
+                <div class="hierarchy-item">Amazon Titan Text Embeddings v2</div>
+            </div>
+        </div>
+        <div class="hierarchy-level">
+            <div class="hierarchy-label">Specialised</div>
+            <div class="hierarchy-items">
+                <div class="hierarchy-item">voyage-code-3 (code)</div>
+                <div class="hierarchy-item">text-embedding-3-small (cost)</div>
+                <div class="hierarchy-item">mxbai-embed-large-v1</div>
+                <div class="hierarchy-item">Linq-Embed-Mistral</div>
+            </div>
+        </div>
+    </div>
+    <div class="callout">
+        <div class="callout-label">BGE-M3 is the current open-source benchmark leader (as of MTEB 2025-Q1)</div>
+        <p>BGE-M3 is trained with a hybrid objective that produces <em>three</em> retrieval modes from a single model: dense embedding, sparse (lexical weight) output, and ColBERT-style multi-vector output. The <strong>BGEM3FlagModel</strong> Python class exposes all three simultaneously; each adds latency but raises recall. For most English-only production use, dense-only BGE-M3 at 1024 dims is the default choice.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-04">
+    <div class="slide-number">04</div>
+    <h2>ColBERT &amp; Late Interaction</h2>
+    <p>ColBERT (Contextualised Late Interaction over BERT, Khattab &amp; Zaharia 2020) occupies a middle ground: it is cheaper than a cross-encoder and more expressive than a bi-encoder. The insight is to <strong>defer</strong> the query&ndash;document interaction until after both sequences are encoded, but to keep per-token vectors rather than collapsing to a single pool.</p>
+    <div class="diagram-flow">
+        <div class="diagram-box accent">Query tokens<br><small>q&#x2081;…q&#x2098;</small></div>
+        <div class="diagram-arrow">&rarr;</div>
+        <div class="diagram-box">BERT encoder<br><small>shared weights</small></div>
+        <div class="diagram-arrow">&rarr;</div>
+        <div class="diagram-box accent">Q embeddings<br><small>[H&times;128]</small></div>
+        <div class="diagram-arrow">&rarr;</div>
+        <div class="diagram-box accent">MaxSim<br><small>per q&#x1D456; over D</small></div>
+        <div class="diagram-arrow">&rarr;</div>
+        <div class="diagram-box accent">Sum &rarr; Score</div>
+    </div>
+    <p>The <strong>MaxSim</strong> operator: for each query token vector q&#x1D456;, find the maximum dot-product over all document token vectors d&#x2C7C;. Sum the per-token maxima. This yields a score that respects the <em>term-level</em> alignment between query and document without requiring all tokens to interact in a single attention matrix.</p>
+    <div class="code-block">
+        <div class="code-header">ColBERT MaxSim in NumPy (simplified)</div>
+<pre><code><span class="kw">import</span> numpy <span class="kw">as</span> np
+
+<span class="kw">def</span> <span class="fn">maxsim_score</span>(Q: np.ndarray, D: np.ndarray) -> <span class="type">float</span>:
+    <span class="cm"># Q: [n_q, 128]  D: [n_d, 128], both L2-normalised</span>
+    scores = Q @ D.T          <span class="cm"># [n_q, n_d]</span>
+    <span class="kw">return</span> float(scores.<span class="fn">max</span>(axis=<span class="num">1</span>).<span class="fn">sum</span>())
+
+<span class="cm"># Index storage: one 128-dim vector per token per document</span>
+<span class="cm"># ColBERTv2 + PLAID compresses to ~4 bits/dim via residual quantisation</span></code></pre>
+    </div>
+    <div class="callout">
+        <div class="callout-label">PLAID &mdash; ColBERTv2 at scale</div>
+        <p><strong>PLAID</strong> (Performance-optimised Late Interaction Driver, Santhanam et al. 2022) makes ColBERT practical at &gt;100 M documents. It uses <strong>residual vector quantisation</strong> (centroids + residuals, &asymp;4 bits/dim) and a two-stage candidate generation: (1) IVF over centroid cluster assignments to find candidate documents, (2) full MaxSim on GPU over the short-list. On MS MARCO, PLAID achieves MRR@10 of 39.7 with &lt;100 ms end-to-end on a single A100. The <strong>RAGatouille</strong> library (<code>pip install ragatouille</code>) wraps ColBERTv2 + PLAID for production use.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-05">
+    <div class="slide-number">05</div>
+    <h2>Matryoshka Embeddings &mdash; One Model, Many Dimensions</h2>
+    <p>Matryoshka Representation Learning (MRL, Kusupati et al. 2022) trains a single encoder such that any <em>prefix</em> of the output vector is itself a valid, useful embedding. You can truncate a 768-dim vector to 64 dims and still get reasonable retrieval, with quality scaling smoothly as you increase dimension.</p>
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Training objective</h4>
+            <p>Standard contrastive loss is applied simultaneously at multiple granularities: full dimension D, D/2, D/4, &hellip; down to some minimum (e.g. 64). The loss is summed across all resolutions with equal or geometrically-decreasing weights. This forces the model to pack the most important dimensions first.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Production benefit</h4>
+            <p>Deploy one model but run it at different precisions depending on latency budget. Index tier-1 docs at 1536 dims; tier-2 at 256 dims. OpenAI's <strong>text-embedding-3-large</strong> (3072 d) and <strong>text-embedding-3-small</strong> (1536 d) both use MRL &mdash; the API accepts a <code>dimensions</code> parameter to truncate server-side, saving egress bandwidth and index memory.</p>
+        </div>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Dimensions</th><th>text-embedding-3-large MTEB avg</th><th>Relative to 3072d</th><th>Storage (1M docs)</th></tr></thead>
+            <tbody>
+                <tr><td>3072</td><td>64.6</td><td>100%</td><td>12.3 GB (float32)</td></tr>
+                <tr><td>1536</td><td>64.1</td><td>99.2%</td><td>6.1 GB</td></tr>
+                <tr><td>256</td><td>62.0</td><td>96.0%</td><td>1.0 GB</td></tr>
+                <tr><td>64</td><td>55.1</td><td>85.3%</td><td>256 MB</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="callout">
+        <div class="callout-label">Nomic's contribution</div>
+        <p><strong>nomic-embed-text-v1.5</strong> is a fully open-weights MRL model (Apache 2.0) with 768 dims, trained on a public dataset (nomic-supervised-contrastive v1). It supports <code>matryoshka_dim</code> in the sentence-transformers API: <code>model.encode(texts, matryoshka_dim=128)</code>. At 128 dims it beats OpenAI text-embedding-ada-002 on MTEB English while being runnable locally on a single CPU.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-06">
+    <div class="slide-number">06</div>
+    <h2>Domain Adaptation &mdash; TSDAE, GPL, Hard Negative Mining</h2>
+    <p>Off-the-shelf models trained on MS MARCO or NLI datasets often degrade significantly on specialised domains (legal, biomedical, financial, customer support). Three techniques address this without requiring manual annotation at scale.</p>
+    <div class="diagram-grid cols-3">
+        <div class="diagram-panel accent-border">
+            <h4>TSDAE</h4>
+            <p><strong>Transformation-based Sequential Denoising Auto-Encoder</strong> (Wang et al. 2021). Corrupt input sentences (delete 60% of tokens), encode, reconstruct from the CLS embedding. No labels needed &mdash; just raw domain text. 10&ndash;20k sentences, ~1 GPU-hour on A100. BEIR domain-transfer gains: +2&ndash;5 NDCG@10 on out-of-domain tasks compared to fine-tuning with weak signals.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>GPL</h4>
+            <p><strong>Generative Pseudo Labelling</strong> (Wang et al. 2021). Use T5-based query generation (BeIR/query-gen-msmarco-t5-base-v1) to synthesise queries for each domain passage. A cross-encoder scores the synthetic (query, passage) pair. The score becomes the label for margin-MSE training on the bi-encoder. GPL closes 70&ndash;80% of the gap between zero-shot and supervised fine-tuning with human labels.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Hard Negative Mining</h4>
+            <p>The most impactful signal. Mine false-positive documents that score high under BM25 or the current bi-encoder but are semantically wrong (e.g. same keyword, different meaning). Training with hard negatives prevents the model from relying on lexical overlap. AugSBERT uses cross-encoder scores to identify hard negatives. Library: <code>sentence-transformers</code> >= 2.2 has <code>MultipleNegativesRankingLoss</code> with mine support.</p>
+        </div>
+    </div>
+    <div class="code-block">
+        <div class="code-header">GPL fine-tuning pipeline sketch (sentence-transformers)</div>
+<pre><code><span class="kw">from</span> sentence_transformers <span class="kw">import</span> SentenceTransformer, losses
+<span class="kw">from</span> sentence_transformers.datasets <span class="kw">import</span> NoDuplicatesDataLoader
+
+model = <span class="fn">SentenceTransformer</span>(<span class="str">"BAAI/bge-base-en-v1.5"</span>)
+
+<span class="cm"># GPL-generated triplets: (query, positive_passage, negative_passage)</span>
+train_loss = losses.<span class="fn">MultipleNegativesRankingLoss</span>(model)
+
+<span class="cm"># warm-up 10 % of steps, then cosine LR decay</span>
+model.<span class="fn">fit</span>(
+    train_objectives=[(dataloader, train_loss)],
+    epochs=<span class="num">1</span>,
+    warmup_steps=<span class="num">100</span>,
+    output_path=<span class="str">"./domain-adapted-bge"</span>,
+)</code></pre>
+    </div>
+</section>
+
+<section class="slide" id="slide-07">
+    <div class="slide-number">07</div>
+    <h2>Evaluating Embeddings &mdash; MTEB, BEIR, In-Domain Evals</h2>
+    <p>Never trust a model ranking from a provider's blog post. Understand what each benchmark measures before picking a model for production.</p>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Benchmark</th><th>Tasks</th><th>Primary Metric</th><th>Coverage</th></tr></thead>
+            <tbody>
+                <tr><td><strong>MTEB v2</strong> (2024)</td><td>7 task types: Retrieval, Reranking, STS, Clustering, Classification, Summarisation, BitextMining</td><td>Average over all tasks; retrieval uses NDCG@10</td><td>129 datasets, 113 languages; ~100 models on the leaderboard</td></tr>
+                <tr><td><strong>BEIR</strong> (Thakur et al. 2021)</td><td>18 retrieval datasets: MSMARCO, TREC-COVID, NFCorpus, Scifact, HotpotQA, FiQA&hellip;</td><td>NDCG@10 on each dataset separately</td><td>English; out-of-domain generalisation focus</td></tr>
+                <tr><td><strong>MIRACL</strong></td><td>Multilingual information retrieval; 18 languages</td><td>NDCG@10</td><td>Evaluates multilingual bi-encoders</td></tr>
+                <tr><td><strong>In-domain eval</strong></td><td>Your own queries &times; your own corpus</td><td>Recall@k, MRR@k, manual review</td><td>Ground truth: generate from annotators or use LLM-as-judge</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="callout">
+        <div class="callout-label">MTEB is necessary but not sufficient</div>
+        <p>A model that ranks #1 on MTEB Retrieval English may be mediocre on your internal helpdesk corpus because MTEB's retrieval tasks are predominantly Wikipedia-style questions. Always measure <strong>in-domain Recall@100</strong> (the input to your reranker) before committing to a model. The fastest way: embed 500&ndash;1000 manually labelled QA pairs from your domain and compute recall across candidate models in an afternoon.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-08">
+    <div class="slide-number">08</div>
+    <h2>Practical Sizing &mdash; Dim, Throughput, GPU vs CPU</h2>
+    <p>Embedding infrastructure is often the largest ongoing compute cost in a RAG system. The decisions compound: higher dimension &rarr; larger index &rarr; slower ANN &rarr; more RAM &rarr; higher hosting cost.</p>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Model</th><th>Dims</th><th>Params</th><th>GPU throughput*</th><th>CPU throughput*</th><th>1M-doc index (float32)</th></tr></thead>
+            <tbody>
+                <tr><td>all-MiniLM-L6-v2</td><td>384</td><td>22 M</td><td>~14 k tokens/s (T4)</td><td>~2 k tokens/s</td><td>1.5 GB</td></tr>
+                <tr><td>BGE-base-en-v1.5</td><td>768</td><td>109 M</td><td>~9 k tokens/s (T4)</td><td>~700 tokens/s</td><td>3.1 GB</td></tr>
+                <tr><td>BGE-large-en-v1.5</td><td>1024</td><td>335 M</td><td>~5 k tokens/s (A10)</td><td>~200 tokens/s</td><td>4.1 GB</td></tr>
+                <tr><td>text-embedding-3-large (API)</td><td>3072</td><td>&mdash;</td><td>API-limited</td><td>&mdash;</td><td>12.3 GB</td></tr>
+                <tr><td>GTE-Qwen2-7B-instruct</td><td>3584</td><td>7 B</td><td>~1.5 k tokens/s (A100)</td><td>impractical</td><td>14.3 GB</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <p style="font-size:0.82rem;">* batch size 64, max 512 tokens, fp16 where supported. Approximate; varies with sequence length.</p>
+    <div class="callout">
+        <div class="callout-label">int8 quantisation &mdash; the free lunch</div>
+        <p>INT8 quantisation of the encoder (via <code>optimum</code> + ONNX Runtime) typically halves memory and increases throughput 1.5&ndash;2&times; with &lt; 0.5% NDCG@10 regression on BEIR for models &ge; 100 M params. The sentence-transformers <code>SentenceTransformer</code> constructor now accepts <code>model_kwargs={"torch_dtype": torch.float16}</code> for fp16 deployment. <strong>Never store vectors in float64</strong> &mdash; float32 is the standard index precision; float16 is acceptable for cosine similarity with modern FAISS builds.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-09">
+    <div class="slide-number">09</div>
+    <h2>What to Take Away</h2>
+    <ul>
+        <li><strong>Dense beats sparse for paraphrase retrieval</strong>; sparse beats dense for exact-term recall. Hybrid is almost always better than either alone.</li>
+        <li><strong>Bi-encoder for retrieval, cross-encoder for reranking.</strong> Never use a cross-encoder at index time; never use a bi-encoder as the final ranker if quality matters.</li>
+        <li><strong>BGE-M3</strong> is the strongest open-weights general-purpose choice as of 2025-Q1. It supports dense, sparse, and ColBERT modes from a single model.</li>
+        <li><strong>ColBERT + PLAID</strong> is the right architecture when you want cross-encoder quality at bi-encoder latency and can afford 4&ndash;8&times; the storage.</li>
+        <li><strong>Matryoshka</strong> (MRL) lets you trade quality for speed at deployment time without retraining. OpenAI text-embedding-3 and nomic-embed-text-v1.5 both support it.</li>
+        <li><strong>Domain-adapt before you scale.</strong> GPL on 10 k domain sentences will outperform the best off-the-shelf model on your corpus if your domain is specialised.</li>
+        <li><strong>Measure in-domain Recall@100</strong> &mdash; MTEB rankings are a starting point, not a verdict.</li>
+    </ul>
+    <div class="callout">
+        <div class="callout-label">Where to next</div>
+        <p>Deck 02 covers vector databases &mdash; HNSW vs IVF, quantisation, filtered search, and how to choose between pgvector, Qdrant, Weaviate, LanceDB, Pinecone, and Milvus. Deck 03 digs into hybrid search and reranking.</p>
+    </div>
+</section>
+
+<footer class="footer">
+    <p>Part of the <a href="https://github.com/BrendanJamesLynskey/LLM_Hub_RAG_Retrieval">RAG &amp; Retrieval Systems Series</a></p>
+    <p style="margin-top:0.5rem;font-size:0.8rem;"><a href="https://github.com/BrendanJamesLynskey/LLM_Hub_RAG_Retrieval">Back to Series Index</a></p>
+</footer>
+<script>
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.slide').forEach(slide => {
+        slide.style.opacity = '0';
+        slide.style.transform = 'translateY(30px)';
+        slide.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(slide);
+    });
+</script>
+</body>
+</html>
